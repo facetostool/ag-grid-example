@@ -1,0 +1,34 @@
+{
+  "name": "ag-grid-enterprise-mysql",
+  "version": "8.2.0",
+  "description": "Documentation for ag-Grid",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ceolter/ag-grid-enterprise-mysql.git"
+  },
+  "keywords": [
+    "aggrid",
+    "mysql"
+  ],
+  "author": "Niall Crosby <niall.crosby@ag-grid.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ceolter/ag-grid-enterprise-mysql/issues"
+  },
+  "homepage": "http://www.ag-grid.com/",
+  "dependencies": {
+    "ag-grid": "8.2.x",
+    "ag-grid-enterprise": "8.2.x"
+  },
+  "devDependencies": {
+    "lodash": "4.17.4",
+    "chai": "3.5.0",
+    "mocha": "3.2.0",
+    "mysql": "2.13.0",
+    "body-parser": "1.17.1",
+    "webpack": "2.2.1",
+    "express": "4.15.2",
+    "style-loader": "0.13.0",
+    "css-loader": "0.23.1"
+  }
+}
