@@ -8,8 +8,11 @@ app.use(bodyParser.json());
 var olympicWinnersDao = require('./src/server/olympicWinnersDao');
 
 app.post('/olympicWinners', function (req, res) {
-    olympicWinnersDao.list(req.body, function(rows) {
-        res.json(rows);
+    olympicWinnersDao.list(req.body, function(rows, lastRow) {
+        res.json({
+            rows: rows,
+            lastRow: lastRow
+        });
     });
 });
 

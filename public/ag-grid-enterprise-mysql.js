@@ -1607,7 +1607,7 @@ var GridOptionsWrapper = (function () {
     GridOptionsWrapper.prototype.getGroupDefaultExpanded = function () { return this.gridOptions.groupDefaultExpanded; };
     GridOptionsWrapper.prototype.getAutoSizePadding = function () { return this.gridOptions.autoSizePadding; };
     GridOptionsWrapper.prototype.getMaxConcurrentDatasourceRequests = function () { return this.gridOptions.maxConcurrentDatasourceRequests; };
-    GridOptionsWrapper.prototype.getMaxPagesInCache = function () { return this.gridOptions.maxPagesInCache; };
+    GridOptionsWrapper.prototype.getMaxBlocksInCache = function () { return this.gridOptions.maxBlocksInCache; };
     GridOptionsWrapper.prototype.getPaginationOverflowSize = function () { return this.gridOptions.paginationOverflowSize; };
     GridOptionsWrapper.prototype.getPaginationPageSize = function () { return this.gridOptions.paginationPageSize; };
     GridOptionsWrapper.prototype.getInfiniteBlockSize = function () { return this.gridOptions.infiniteBlockSize; };
@@ -1652,6 +1652,7 @@ var GridOptionsWrapper = (function () {
     GridOptionsWrapper.prototype.isSuppressMenuFilterPanel = function () { return isTrue(this.gridOptions.suppressMenuFilterPanel); };
     GridOptionsWrapper.prototype.isSuppressUseColIdForGroups = function () { return isTrue(this.gridOptions.suppressUseColIdForGroups); };
     GridOptionsWrapper.prototype.isSuppressAggFuncInHeader = function () { return isTrue(this.gridOptions.suppressAggFuncInHeader); };
+    GridOptionsWrapper.prototype.isSuppressAggAtRootLevel = function () { return isTrue(this.gridOptions.suppressAggAtRootLevel); };
     GridOptionsWrapper.prototype.isSuppressMenuMainPanel = function () { return isTrue(this.gridOptions.suppressMenuMainPanel); };
     GridOptionsWrapper.prototype.isEnableRangeSelection = function () { return isTrue(this.gridOptions.enableRangeSelection); };
     GridOptionsWrapper.prototype.isPaginationAutoPageSize = function () { return isTrue(this.gridOptions.paginationAutoPageSize); };
@@ -1849,6 +1850,9 @@ var GridOptionsWrapper = (function () {
         }
         if (options.infinitePageSize) {
             console.warn('ag-grid: since version 9.0.x infinitePageSize is now called infiniteBlockSize');
+        }
+        if (options.maxPagesInCache) {
+            console.warn('ag-grid: since version 10.0.x maxPagesInCache is now called maxBlocksInCache');
         }
     };
     GridOptionsWrapper.prototype.getLocaleTextFunc = function () {
@@ -2601,7 +2605,7 @@ var ColumnController = (function () {
         }
         column.setValueActive(active);
         if (active && !column.getAggFunc()) {
-            var defaultAggFunc = this.aggFuncService.getDefaultAggFunc();
+            var defaultAggFunc = this.aggFuncService.getDefaultAggFunc(column);
             column.setAggFunc(defaultAggFunc);
         }
     };
@@ -9511,6 +9515,8 @@ var ValueService = (function () {
         this.initialised = true;
     };
     ValueService.prototype.getValue = function (column, node) {
+        if (node.group && column.getColId() === node.field)
+            return node.key;
         return this.getValueUsingSpecificData(column, node.data, node);
     };
     ValueService.prototype.getValueUsingSpecificData = function (column, data, node) {
@@ -10189,6 +10195,9 @@ var GridApi = (function () {
             case constants_1.Constants.ROW_MODEL_TYPE_VIRTUAL_DEPRECATED:
                 this.infinitePageRowModel = this.rowModel;
                 break;
+            case constants_1.Constants.ROW_MODEL_TYPE_ENTERPRISE:
+                this.enterpriseRowModel = this.rowModel;
+                break;
         }
         if (this.gridOptionsWrapper.isPagination()) {
             this.paginationService = this.paginationProxy;
@@ -10706,27 +10715,43 @@ var GridApi = (function () {
         this.rowModel.addItems(items, skipRefresh);
     };
     GridApi.prototype.refreshVirtualPageCache = function () {
-        console.warn('ag-Grid: refreshVirtualPageCache() is now called refreshInfinitePageCache(), please call refreshInfinitePageCache() instead');
-        this.refreshInfinitePageCache();
+        console.warn('ag-Grid: refreshVirtualPageCache() is now called refreshInfiniteCache(), please call refreshInfiniteCache() instead');
+        this.refreshInfiniteCache();
     };
     GridApi.prototype.refreshInfinitePageCache = function () {
+        console.warn('ag-Grid: refreshInfinitePageCache() is now called refreshInfiniteCache(), please call refreshInfiniteCache() instead');
+        this.refreshInfiniteCache();
+    };
+    GridApi.prototype.refreshInfiniteCache = function () {
         if (this.infinitePageRowModel) {
             this.infinitePageRowModel.refreshCache();
         }
         else {
-            console.warn("ag-Grid: api.refreshVirtualPageCache is only available when rowModelType='virtual'.");
+            console.warn("ag-Grid: api.refreshInfiniteCache is only available when rowModelType='infinite'.");
         }
     };
     GridApi.prototype.purgeVirtualPageCache = function () {
-        console.warn('ag-Grid: purgeVirtualPageCache() is now called purgeInfinitePageCache(), please call purgeInfinitePageCache() instead');
+        console.warn('ag-Grid: purgeVirtualPageCache() is now called purgeInfiniteCache(), please call purgeInfiniteCache() instead');
         this.purgeInfinitePageCache();
     };
     GridApi.prototype.purgeInfinitePageCache = function () {
+        console.warn('ag-Grid: purgeInfinitePageCache() is now called purgeInfiniteCache(), please call purgeInfiniteCache() instead');
+        this.purgeInfiniteCache();
+    };
+    GridApi.prototype.purgeInfiniteCache = function () {
         if (this.infinitePageRowModel) {
             this.infinitePageRowModel.purgeCache();
         }
         else {
-            console.warn("ag-Grid: api.refreshVirtualPageCache is only available when rowModelType='virtual'.");
+            console.warn("ag-Grid: api.purgeInfiniteCache is only available when rowModelType='infinite'.");
+        }
+    };
+    GridApi.prototype.purgeEnterpriseCache = function (route) {
+        if (this.enterpriseRowModel) {
+            this.enterpriseRowModel.purgeCache(route);
+        }
+        else {
+            console.warn("ag-Grid: api.purgeEnterpriseCache is only available when rowModelType='enterprise'.");
         }
     };
     GridApi.prototype.getVirtualRowCount = function () {
@@ -10762,15 +10787,22 @@ var GridApi = (function () {
         }
     };
     GridApi.prototype.getVirtualPageState = function () {
-        console.warn('ag-Grid: getVirtualPageState() is now called getInfinitePageState(), please call getInfinitePageState() instead');
-        return this.getInfinitePageState();
+        console.warn('ag-Grid: getVirtualPageState() is now called getCacheBlockState(), please call getCacheBlockState() instead');
+        return this.getCacheBlockState();
     };
     GridApi.prototype.getInfinitePageState = function () {
+        console.warn('ag-Grid: getInfinitePageState() is now called getCacheBlockState(), please call getCacheBlockState() instead');
+        return this.getCacheBlockState();
+    };
+    GridApi.prototype.getCacheBlockState = function () {
         if (this.infinitePageRowModel) {
             return this.infinitePageRowModel.getBlockState();
         }
+        else if (this.enterpriseRowModel) {
+            return this.enterpriseRowModel.getBlockState();
+        }
         else {
-            console.warn("ag-Grid: api.getVirtualPageState is only available when rowModelType='virtual'.");
+            console.warn("ag-Grid: api.getCacheBlockState() is only available when rowModelType='infinite' or rowModelType='enterprise'.");
         }
     };
     GridApi.prototype.checkGridSize = function () {
@@ -12827,13 +12859,17 @@ var AggFuncService = (function () {
         this.aggFuncsMap[AggFuncService.AGG_COUNT] = aggCount;
         this.aggFuncsMap[AggFuncService.AGG_AVG] = aggAvg;
     };
-    AggFuncService.prototype.getDefaultAggFunc = function () {
-        if (this.aggFuncsMap[AggFuncService.AGG_SUM]) {
-            // use 'sum' if it's still there (ie user has not removed it)
+    AggFuncService.prototype.getDefaultAggFunc = function (column) {
+        var allKeys = this.getFuncNames(column);
+        // use 'sum' if it's a) allowed for the column and b) still registered
+        // (ie not removed by user)
+        var sumInKeysList = allKeys.indexOf(AggFuncService.AGG_SUM) >= 0;
+        var sumInFuncs = main_1._.exists(this.aggFuncsMap[AggFuncService.AGG_SUM]);
+        var useSum = sumInKeysList && sumInFuncs;
+        if (useSum) {
             return AggFuncService.AGG_SUM;
         }
         else {
-            var allKeys = this.getFuncNames();
             if (main_1.Utils.existsAndNotEmpty(allKeys)) {
                 return allKeys[0];
             }
@@ -12853,8 +12889,14 @@ var AggFuncService = (function () {
         this.init();
         return this.aggFuncsMap[name];
     };
-    AggFuncService.prototype.getFuncNames = function () {
-        return Object.keys(this.aggFuncsMap).sort();
+    AggFuncService.prototype.getFuncNames = function (column) {
+        var userAllowedFuncs = column.getColDef().allowedAggFuncs;
+        if (main_1._.exists(userAllowedFuncs)) {
+            return userAllowedFuncs;
+        }
+        else {
+            return Object.keys(this.aggFuncsMap).sort();
+        }
     };
     AggFuncService.prototype.clear = function () {
         this.aggFuncsMap = {};
@@ -16746,15 +16788,21 @@ var RowNodeBlock = (function (_super) {
             }
         }
     };
-    RowNodeBlock.prototype.forEachNode = function (callback, sequence, rowCount) {
+    RowNodeBlock.prototype.forEachNode = function (callback, sequence, rowCount, deep) {
         this.forEachNodeCallback(function (rowNode) {
             callback(rowNode, sequence.next());
             // this will only every happen for enterprise row model, as infinite
             // row model doesn't have groups
-            if (rowNode.childrenCache) {
-                rowNode.childrenCache.forEachNode(callback, sequence);
+            if (deep && rowNode.childrenCache) {
+                rowNode.childrenCache.forEachNodeDeep(callback, sequence);
             }
         }, rowCount);
+    };
+    RowNodeBlock.prototype.forEachNodeDeep = function (callback, sequence, rowCount) {
+        this.forEachNode(callback, sequence, rowCount, true);
+    };
+    RowNodeBlock.prototype.forEachNodeShallow = function (callback, sequence, rowCount) {
+        this.forEachNode(callback, sequence, rowCount, false);
     };
     RowNodeBlock.prototype.getVersion = function () {
         return this.version;
@@ -18072,7 +18120,7 @@ var MenuItemMapper = (function () {
         var _this = this;
         var localeTextFunc = this.gridOptionsWrapper.getLocaleTextFunc();
         var columnIsAlreadyAggValue = column.isValueActive();
-        var funcNames = this.aggFuncService.getFuncNames();
+        var funcNames = this.aggFuncService.getFuncNames(column);
         var columnToUse;
         if (column.isPrimary()) {
             columnToUse = column;
@@ -19266,7 +19314,7 @@ var ComponentUtil = (function () {
     ComponentUtil.NUMBER_PROPERTIES = [
         'rowHeight', 'rowBuffer', 'colWidth', 'headerHeight', 'groupDefaultExpanded',
         'minColWidth', 'maxColWidth', 'viewportRowModelPageSize', 'viewportRowModelBufferSize',
-        'layoutInterval', 'autoSizePadding', 'maxPagesInCache', 'maxConcurrentDatasourceRequests',
+        'layoutInterval', 'autoSizePadding', 'maxBlocksInCache', 'maxConcurrentDatasourceRequests',
         'paginationOverflowSize', 'paginationPageSize', 'infiniteBlockSize', 'infiniteInitialRowCount',
         'scrollbarWidth', 'paginationStartPage', 'infiniteBlockSize'
     ];
@@ -19285,7 +19333,7 @@ var ComponentUtil = (function () {
         'suppressContextMenu', 'suppressMenuFilterPanel', 'suppressMenuMainPanel', 'suppressMenuColumnPanel',
         'enableStatusBar', 'rememberGroupStateWhenNewData', 'enableCellChangeFlash', 'suppressDragLeaveHidesColumns',
         'suppressMiddleClickScrolls', 'suppressPreventDefaultOnMouseWheel', 'suppressUseColIdForGroups',
-        'suppressCopyRowsToClipboard', 'pivotMode', 'suppressAggFuncInHeader', 'suppressColumnVirtualisation',
+        'suppressCopyRowsToClipboard', 'pivotMode', 'suppressAggFuncInHeader', 'suppressAggFuncInHeader', 'suppressAggAtRootLevel',
         'suppressFocusAfterRefresh', 'functionsPassive', 'functionsReadOnly', 'suppressRowHoverClass',
         'animateRows', 'groupSelectsFiltered', 'groupRemoveSingleChildren', 'enableRtl', 'suppressClickEdit',
         'enableGroupEdit', 'embedFullWidthRows', 'suppressTabbing', 'suppressPaginationPanel', 'floatingFilter',
@@ -21457,10 +21505,10 @@ var RowNodeCache = (function (_super) {
         }
         this.onCacheUpdated();
     };
-    RowNodeCache.prototype.forEachNode = function (callback, sequence) {
+    RowNodeCache.prototype.forEachNodeDeep = function (callback, sequence) {
         var _this = this;
         this.forEachBlockInOrder(function (block) {
-            block.forEachNode(callback, sequence, _this.virtualRowCount);
+            block.forEachNodeDeep(callback, sequence, _this.virtualRowCount);
         });
     };
     RowNodeCache.prototype.forEachBlockInOrder = function (callback) {
@@ -21505,6 +21553,11 @@ var RowNodeCache = (function (_super) {
             // however enterprise also updates the row indexes first
             this.dispatchEvent(RowNodeCache.EVENT_CACHE_UPDATED);
         }
+    };
+    RowNodeCache.prototype.purgeCache = function () {
+        var _this = this;
+        this.forEachBlockInOrder(function (block) { return _this.removeBlockFromCache(block); });
+        this.onCacheUpdated();
     };
     RowNodeCache.EVENT_CACHE_UPDATED = 'cacheUpdated';
     return RowNodeCache;
@@ -23794,6 +23847,10 @@ var AggregationStage = (function () {
                 _this.recursivelyCreateAggData(child, measureColumns, pivotColumns);
             }
         });
+        //Optionally prevent the aggregation at the root Node
+        //https://ag-grid.atlassian.net/browse/AG-388
+        if (rowNode.level === -1 && this.gridOptionsWrapper.isSuppressAggAtRootLevel())
+            return;
         this.aggregateRowNode(rowNode, measureColumns, pivotColumns);
     };
     AggregationStage.prototype.aggregateRowNode = function (rowNode, measureColumns, pivotColumns) {
@@ -23801,13 +23858,13 @@ var AggregationStage = (function () {
         var pivotColumnsMissing = pivotColumns.length === 0;
         var userProvidedGroupRowAggNodes = this.gridOptionsWrapper.getGroupRowAggNodesFunc();
         var aggResult;
-        if (userProvidedGroupRowAggNodes) {
+        if (rowNode.group && userProvidedGroupRowAggNodes) {
             aggResult = userProvidedGroupRowAggNodes(rowNode.childrenAfterFilter);
         }
         else if (measureColumnsMissing) {
             aggResult = null;
         }
-        else if (pivotColumnsMissing) {
+        else if (rowNode.group && pivotColumnsMissing) {
             aggResult = this.aggregateRowNodeUsingValuesOnly(rowNode, measureColumns);
         }
         else {
@@ -24210,7 +24267,7 @@ var SetFilter = (function (_super) {
             this.virtualList.setRowHeight(this.filterParams.cellHeight);
         }
         this.virtualList.setComponentCreator(this.createSetListItem.bind(this));
-        this.model = new setFilterModel_1.SetFilterModel(this.filterParams.colDef, this.filterParams.rowModel, this.filterParams.valueGetter, this.filterParams.doesRowPassOtherFilter, this.suppressSorting);
+        this.model = new setFilterModel_1.SetFilterModel(this.filterParams.colDef, this.filterParams.rowModel, this.filterParams.valueGetter, this.filterParams.doesRowPassOtherFilter, this.filterParams.suppressSorting);
         this.virtualList.setModel(new ModelWrapper(this.model));
         main_1._.setVisible(this.getGui().querySelector('#ag-mini-filter'), !this.filterParams.suppressMiniFilter);
         this.eMiniFilter.value = this.model.getMiniFilter();
@@ -24655,7 +24712,7 @@ var SetFilterModel = (function () {
         return this.displayedValues[index];
     };
     SetFilterModel.prototype.selectEverything = function () {
-        if (!this.filterParams.selectAllOnMiniFilter) {
+        if (!this.filterParams.selectAllOnMiniFilter || !this.miniFilter) {
             this.selectOn(this.allUniqueValues);
         }
         else {
@@ -25106,7 +25163,7 @@ var ColumnComponent = (function (_super) {
         }
         this.popupShowing = true;
         var virtualList = new virtualList_1.VirtualList();
-        var rows = this.aggFuncService.getFuncNames();
+        var rows = this.aggFuncService.getFuncNames(this.column);
         virtualList.setModel({
             getRow: function (index) { return rows[index]; },
             getRowCount: function () { return rows.length; }
@@ -26328,7 +26385,6 @@ var NumberFilter = (function (_super) {
     };
     NumberFilter.prototype.initialiseFilterBodyUi = function () {
         this.filterNumber = null;
-        this.setFilterType(NumberFilter.EQUALS);
         this.eFilterTextField = this.getGui().querySelector("#filterText");
         this.addDestroyableEventListener(this.eFilterTextField, "input", this.onTextFieldsChanged.bind(this));
         this.addDestroyableEventListener(this.eFilterToTextField, "input", this.onTextFieldsChanged.bind(this));
@@ -27158,15 +27214,9 @@ var HeaderRowComp = (function (_super) {
         switch (this.type) {
             case HeaderRowType.COLUMN:
                 if (this.isUsingOldHeaderRenderer(columnGroupChild)) {
-                    ////// DEPRECATED - TAKE THIS OUT IN V9
-                    if (!warningGiven) {
-                        console.warn('ag-Grid: since v8, custom headers are now done using components. Please refer to the documentation https://www.ag-grid.com/javascript-grid-header-rendering/. Support for the old way will be dropped in v9.');
-                        warningGiven = true;
-                    }
                     result = new renderedHeaderCell_1.RenderedHeaderCell(columnGroupChild, this.eRoot, this.dropTarget, this.pinned);
                 }
                 else {
-                    // the future!!!
                     result = new headerWrapperComp_1.HeaderWrapperComp(columnGroupChild, this.eRoot, this.dropTarget, this.pinned);
                 }
                 break;
@@ -27204,6 +27254,7 @@ var HeaderRowComp = (function (_super) {
          *let filterComponent:BaseFilter<any, any, any> = <any>this.filterManager.getFilterComponent(column);
          */
         var baseParams = {
+            column: column,
             currentParentModel: function () {
                 var filterComponent = _this.filterManager.getFilterComponent(column);
                 return (filterComponent.getNullableModel) ?
@@ -27265,8 +27316,6 @@ var HeaderRowComp = (function (_super) {
     return HeaderRowComp;
 }(component_1.Component));
 exports.HeaderRowComp = HeaderRowComp;
-// remove this in v9, when we take out support for the old headers
-var warningGiven = false;
 
 
 /***/ }),
@@ -30108,7 +30157,6 @@ var RenderedRow = (function (_super) {
             columnApi: this.gridOptionsWrapper.getColumnApi(),
             context: this.gridOptionsWrapper.getContext()
         });
-        this.addDataChangedListener();
         this.initialised = true;
     };
     RenderedRow.prototype.stopRowEditing = function (cancel) {
@@ -30168,16 +30216,6 @@ var RenderedRow = (function (_super) {
         this.eAllRowContainers.forEach(function (row) { return utils_1.Utils.addOrRemoveCssClass(row, 'ag-row-editing', value); });
         var event = value ? events_1.Events.EVENT_ROW_EDITING_STARTED : events_1.Events.EVENT_ROW_EDITING_STOPPED;
         this.mainEventService.dispatchEvent(event, { node: this.rowNode });
-    };
-    // because data can change, especially in virtual pagination and viewport row models, need to allow setting
-    // styles and classes after the data has changed
-    RenderedRow.prototype.addDataChangedListener = function () {
-        var _this = this;
-        var dataChangedListener = function () {
-            _this.addStyleFromRowStyleFunc();
-            _this.addClassesFromRowClass();
-        };
-        this.addDestroyableEventListener(this.rowNode, rowNode_1.RowNode.EVENT_DATA_CHANGED, dataChangedListener);
     };
     RenderedRow.prototype.angular1Compile = function (element) {
         if (this.scope) {
@@ -30401,10 +30439,15 @@ var RenderedRow = (function (_super) {
             var animate = false;
             var newData = true;
             _this.forEachRenderedCell(function (renderedCell) { return renderedCell.refreshCell(animate, newData); });
-            // check for selected also, as this could be after lazy loading of the row data, in which csae
+            // check for selected also, as this could be after lazy loading of the row data, in which case
             // the id might of just gotten set inside the row and the row selected state may of changed
             // as a result. this is what happens when selected rows are loaded in virtual pagination.
+            // - niall note - since moving to the stub component, this may no longer be true, as replacing
+            // the stub component now replaces the entire row
             _this.onRowSelected();
+            // as data has changed, then the style and class needs to be recomputed
+            _this.addStyleFromRowStyleFunc();
+            _this.addClassesFromRowClass();
         };
         this.addDestroyableEventListener(this.rowNode, rowNode_1.RowNode.EVENT_DATA_CHANGED, nodeDataChangedListener);
     };
@@ -31003,7 +31046,7 @@ var RowNodeBlockLoader = (function () {
         }
         this.printCacheStatus();
         if (this.activeBlockLoadsCount >= this.maxConcurrentRequests) {
-            this.logger.log("checkPageToLoad: max loads exceeded");
+            this.logger.log("checkBlockToLoad: max loads exceeded");
             return;
         }
         var blockToLoad = null;
@@ -31015,31 +31058,36 @@ var RowNodeBlockLoader = (function () {
         if (blockToLoad) {
             blockToLoad.load();
             this.activeBlockLoadsCount++;
-            this.logger.log("checkPageToLoad: loading page " + blockToLoad.getPageNumber());
+            this.logger.log("checkBlockToLoad: loading page " + blockToLoad.getPageNumber());
             this.printCacheStatus();
         }
         else {
-            this.logger.log("checkPageToLoad: no pages to load");
+            this.logger.log("checkBlockToLoad: no pages to load");
         }
     };
     RowNodeBlockLoader.prototype.getBlockState = function () {
-        var result = [];
+        var result = {};
         this.blocks.forEach(function (block) {
+            var nodeIdPrefix = block.getNodeIdPrefix();
             var stateItem = {
-                nodeIdPrefix: block.getNodeIdPrefix(),
                 blockNumber: block.getPageNumber(),
                 startRow: block.getStartRow(),
                 endRow: block.getEndRow(),
                 pageStatus: block.getState()
             };
-            result.push(stateItem);
+            if (utils_1._.exists(nodeIdPrefix)) {
+                result[nodeIdPrefix + block.getPageNumber()] = stateItem;
+            }
+            else {
+                result[block.getPageNumber()] = stateItem;
+            }
         });
         return result;
     };
     RowNodeBlockLoader.prototype.printCacheStatus = function () {
         if (this.logger.isLogging()) {
-            this.logger.log(("checkPageToLoad: activePageLoadsCount = " + this.activeBlockLoadsCount + ",")
-                + (" pages = " + JSON.stringify(this.getBlockState())));
+            this.logger.log(("printCacheStatus: activePageLoadsCount = " + this.activeBlockLoadsCount + ",")
+                + (" blocks = " + JSON.stringify(this.getBlockState())));
         }
     };
     __decorate([
@@ -32070,14 +32118,13 @@ var InfiniteCache = (function (_super) {
         this.postCreateBlock(newBlock);
         return newBlock;
     };
+    // we have this on infinite row model only, not enterprise row model,
+    // because for enterprise, it would leave the children in inconsistent
+    // state - eg if a node had children, but after the refresh it had data
+    // for a different row, then the children would be with the wrong row node.
     InfiniteCache.prototype.refreshCache = function () {
         this.forEachBlockInOrder(function (block) { return block.setDirty(); });
         this.checkBlockToLoad();
-    };
-    InfiniteCache.prototype.purgeCache = function () {
-        var _this = this;
-        this.forEachBlockInOrder(function (block) { return _this.removeBlockFromCache(block); });
-        this.onCacheUpdated();
     };
     __decorate([
         context_1.Autowired('eventService'), 
@@ -32248,7 +32295,7 @@ var InfiniteRowModel = (function (_super) {
             maxConcurrentRequests: maxConcurrentRequests,
             overflowSize: this.gridOptionsWrapper.getPaginationOverflowSize(),
             initialRowCount: this.gridOptionsWrapper.getInfiniteInitialRowCount(),
-            maxBlocksInCache: this.gridOptionsWrapper.getMaxPagesInCache(),
+            maxBlocksInCache: this.gridOptionsWrapper.getMaxBlocksInCache(),
             blockSize: this.gridOptionsWrapper.getInfiniteBlockSize(),
             rowHeight: this.gridOptionsWrapper.getRowHeightAsNumber(),
             // the cache could create this, however it is also used by the pages, so handy to create it
@@ -32295,7 +32342,7 @@ var InfiniteRowModel = (function (_super) {
     };
     InfiniteRowModel.prototype.forEachNode = function (callback) {
         if (this.infiniteCache) {
-            this.infiniteCache.forEachNode(callback, new utils_1.NumberSequence());
+            this.infiniteCache.forEachNodeDeep(callback, new utils_1.NumberSequence());
         }
     };
     InfiniteRowModel.prototype.getCurrentPageHeight = function () {
@@ -32543,11 +32590,20 @@ var SortService = (function () {
         rowNode.childrenAfterSort = rowNode.childrenAfterFilter.slice(0);
         var sortActive = utils_1._.exists(sortOptions) && sortOptions.length > 0;
         if (sortActive) {
-            rowNode.childrenAfterSort.sort(this.compareRowNodes.bind(this, sortOptions));
+            // RE https://ag-grid.atlassian.net/browse/AG-444
+            //Javascript sort is non deterministic when all the array items are equals
+            //ie Comparator always returns 0, so if you want to ensure the array keeps its
+            //order, then you need to add an additional sorting condition manually, in this
+            //case we are going to inspect the original array position
+            var sortedRowNodes = rowNode.childrenAfterSort.map(function (it, pos) { return { currentPos: pos, rowNode: it }; });
+            sortedRowNodes.sort(this.compareRowNodes.bind(this, sortOptions));
+            rowNode.childrenAfterSort = sortedRowNodes.map(function (sorted) { return sorted.rowNode; });
         }
         this.updateChildIndexes(rowNode);
     };
-    SortService.prototype.compareRowNodes = function (sortOptions, nodeA, nodeB) {
+    SortService.prototype.compareRowNodes = function (sortOptions, sortedNodeA, sortedNodeB) {
+        var nodeA = sortedNodeA.rowNode;
+        var nodeB = sortedNodeB.rowNode;
         // Iterate columns, return the first that doesn't match
         for (var i = 0, len = sortOptions.length; i < len; i++) {
             var sortOption = sortOptions[i];
@@ -32568,8 +32624,8 @@ var SortService = (function () {
                 return comparatorResult * sortOption.inverter;
             }
         }
-        // All matched, these are identical as far as the sort is concerned:
-        return 0;
+        // All matched, we make is so that the original sort order is kept:
+        return sortedNodeA.currentPos - sortedNodeB.currentPos;
     };
     SortService.prototype.updateChildIndexes = function (rowNode) {
         if (utils_1._.missing(rowNode.childrenAfterSort)) {
@@ -32994,7 +33050,6 @@ var EnterpriseBlock = (function (_super) {
         });
     };
     EnterpriseBlock.prototype.setDataAndId = function (rowNode, data, index) {
-        // stub gets set to true here, and then false when this rowNode gets it's data
         rowNode.stub = false;
         if (ag_grid_1._.exists(data)) {
             // if the user is not providing id's, then we build an id based on the index.
@@ -33259,6 +33314,29 @@ var EnterpriseCache = (function (_super) {
     EnterpriseCache.prototype.isIndexInCache = function (index) {
         return index >= this.firstDisplayIndex && index <= this.lastDisplayIndex;
     };
+    EnterpriseCache.prototype.getChildCache = function (keys) {
+        var _this = this;
+        if (ag_grid_1._.missingOrEmpty(keys)) {
+            return this;
+        }
+        var nextKey = keys[0];
+        var nextEnterpriseCache = null;
+        this.forEachBlockInOrder(function (block) {
+            // callback: (rowNode: RowNode, index: number) => void, sequence: NumberSequence, rowCount: number
+            block.forEachNodeShallow(function (rowNode) {
+                if (rowNode.key === nextKey) {
+                    nextEnterpriseCache = rowNode.childrenCache;
+                }
+            }, new ag_grid_1.NumberSequence(), _this.getVirtualRowCount());
+        });
+        if (nextEnterpriseCache) {
+            var keyListForNextLevel = keys.slice(1, keys.length);
+            return nextEnterpriseCache.getChildCache(keyListForNextLevel);
+        }
+        else {
+            return null;
+        }
+    };
     __decorate([
         ag_grid_1.Autowired('eventService'), 
         __metadata('design:type', ag_grid_1.EventService)
@@ -33424,7 +33502,7 @@ var EnterpriseRowModel = (function (_super) {
             overflowSize: 1,
             initialRowCount: 1,
             maxConcurrentRequests: this.gridOptionsWrapper.getMaxConcurrentDatasourceRequests(),
-            maxBlocksInCache: this.gridOptionsWrapper.getMaxPagesInCache(),
+            maxBlocksInCache: this.gridOptionsWrapper.getMaxBlocksInCache(),
             blockSize: this.gridOptionsWrapper.getInfiniteBlockSize(),
             rowHeight: this.rowHeight
         };
@@ -33531,7 +33609,25 @@ var EnterpriseRowModel = (function (_super) {
     };
     EnterpriseRowModel.prototype.forEachNode = function (callback) {
         if (this.rootNode && this.rootNode.childrenCache) {
-            this.rootNode.childrenCache.forEachNode(callback, new ag_grid_1.NumberSequence());
+            this.rootNode.childrenCache.forEachNodeDeep(callback, new ag_grid_1.NumberSequence());
+        }
+    };
+    EnterpriseRowModel.prototype.purgeCache = function (route) {
+        if (route === void 0) { route = []; }
+        if (this.rootNode && this.rootNode.childrenCache) {
+            var topLevelCache = this.rootNode.childrenCache;
+            var cacheToPurge = topLevelCache.getChildCache(route);
+            if (cacheToPurge) {
+                cacheToPurge.purgeCache();
+            }
+        }
+    };
+    EnterpriseRowModel.prototype.getBlockState = function () {
+        if (this.rowNodeBlockLoader) {
+            return this.rowNodeBlockLoader.getBlockState();
+        }
+        else {
+            return null;
         }
     };
     EnterpriseRowModel.prototype.insertItemsAtIndex = function (index, items, skipRefresh) {
@@ -35766,7 +35862,8 @@ __webpack_require__(152);
             filter: 'text',
             filterParams: {
                 newRowsAction: 'keep'
-            }
+            },
+            allowedAggFuncs: ['sum','min','max','bollocks']
         },
         columnDefs: columnDefs,
         enableColResize: true,
@@ -35796,7 +35893,7 @@ __webpack_require__(152);
         httpRequest.onreadystatechange = function() {
             if (httpRequest.readyState == 4 && httpRequest.status == 200) {
                 var httpResponse = JSON.parse(httpRequest.responseText);
-                params.successCallback(httpResponse);
+                params.successCallback(httpResponse.rows, httpResponse.lastRow);
             }
         };
     };

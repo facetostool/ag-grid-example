@@ -32,7 +32,8 @@ require('ag-grid/dist/styles/theme-fresh.css');
             filter: 'text',
             filterParams: {
                 newRowsAction: 'keep'
-            }
+            },
+            allowedAggFuncs: ['sum','min','max','bollocks']
         },
         columnDefs: columnDefs,
         enableColResize: true,
@@ -62,7 +63,7 @@ require('ag-grid/dist/styles/theme-fresh.css');
         httpRequest.onreadystatechange = function() {
             if (httpRequest.readyState == 4 && httpRequest.status == 200) {
                 var httpResponse = JSON.parse(httpRequest.responseText);
-                params.successCallback(httpResponse);
+                params.successCallback(httpResponse.rows, httpResponse.lastRow);
             }
         };
     };

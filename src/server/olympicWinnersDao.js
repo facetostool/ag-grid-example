@@ -133,6 +133,43 @@ OlympicWinnersDao.prototype.isDoingGrouping = function(rowGroupCols, groupKeys) 
     return rowGroupCols.length > groupKeys.length;
 };
 
+OlympicWinnersDao.prototype.createLimitSql = function(startRow, pageSize) {
+    return ' limit ' + (pageSize + 1) + ' offset ' + startRow;
+};
+
+OlympicWinnersDao.prototype.getRowCount = function(startRow, pageSize, results) {
+    // if no results (maybe an error, or user is seeking for a block well past
+    // the possible blocks), then return null, which means we don't know what the
+    // last row is. the user should never ask for a block that is past the last block,
+    // but they could, for example, purge the cache, and since loading last time rows
+    // have been removed from the server.
+    if (results===null || results===undefined || results.length===0) {
+        return null;
+    }
+
+    // see how many rows we got back
+    var rowCount = results.length;
+
+    // if we got back more than the page size, then that means there are more rows
+    // after this page, so we return null, as we can't work out the row count
+    if (rowCount > pageSize) {
+        return null;
+    } else {
+        // otherwise we have reached the end of the list, ie the last row is in
+        // this block, so we can work out the exact row count
+        var totalRowCount = startRow + rowCount;
+        return totalRowCount;
+    }
+};
+
+OlympicWinnersDao.prototype.cutResultsToPageSize = function(pageSize, results) {
+    if (results && results.length>pageSize) {
+        return results.splice(0, pageSize);
+    } else {
+        return results;
+    }
+};
+
 OlympicWinnersDao.prototype.list = function(request, resultsCallback) {
 
     var rowGroupCols = request.rowGroupCols;
@@ -141,17 +178,26 @@ OlympicWinnersDao.prototype.list = function(request, resultsCallback) {
     var filterModel = request.filterModel;
     var sortModel = request.sortModel;
 
+    var startRow = request.startRow;
+    var endRow = request.endRow;
+    var pageSize = endRow - startRow;
+
     var selectSql = this.createSelectSql(rowGroupCols, valueCols, groupKeys);
     var groupBySql = this.createGroupBySql(rowGroupCols, groupKeys);
     var whereSql = this.createWhereSql(rowGroupCols, groupKeys, filterModel);
     var orderBySql = this.createOrderBySql(sortModel);
+    var limitSql = this.createLimitSql(startRow, pageSize);
 
-    var sql = selectSql + ' from sample_data.olympic_winners ' + whereSql + groupBySql + orderBySql;
+    var sql = selectSql + ' from sample_data.olympic_winners ' + whereSql + groupBySql + orderBySql + limitSql;
 
     console.log('sql = ' + sql);
+    var that = this;
 
     connection.query(sql, function(error, results, fields) {
-        resultsCallback(results);
+        var rowCount = that.getRowCount(startRow, pageSize, results);
+        var resultsForPage = that.cutResultsToPageSize(pageSize, results);
+
+        resultsCallback(resultsForPage, rowCount);
     });
 
 };
