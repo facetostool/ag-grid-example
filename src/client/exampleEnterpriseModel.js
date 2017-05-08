@@ -33,7 +33,7 @@ require('ag-grid/dist/styles/theme-fresh.css');
             filterParams: {
                 newRowsAction: 'keep'
             },
-            allowedAggFuncs: ['sum','min','max','bollocks']
+            allowedAggFuncs: ['sum','min','max']
         },
         columnDefs: columnDefs,
         enableColResize: true,
