@@ -1608,9 +1608,9 @@ var GridOptionsWrapper = (function () {
     GridOptionsWrapper.prototype.getAutoSizePadding = function () { return this.gridOptions.autoSizePadding; };
     GridOptionsWrapper.prototype.getMaxConcurrentDatasourceRequests = function () { return this.gridOptions.maxConcurrentDatasourceRequests; };
     GridOptionsWrapper.prototype.getMaxBlocksInCache = function () { return this.gridOptions.maxBlocksInCache; };
-    GridOptionsWrapper.prototype.getPaginationOverflowSize = function () { return this.gridOptions.paginationOverflowSize; };
+    GridOptionsWrapper.prototype.getCacheOverflowSize = function () { return this.gridOptions.cacheOverflowSize; };
     GridOptionsWrapper.prototype.getPaginationPageSize = function () { return this.gridOptions.paginationPageSize; };
-    GridOptionsWrapper.prototype.getInfiniteBlockSize = function () { return this.gridOptions.infiniteBlockSize; };
+    GridOptionsWrapper.prototype.getCacheBlockSize = function () { return this.gridOptions.cacheBlockSize; };
     GridOptionsWrapper.prototype.getInfiniteInitialRowCount = function () { return this.gridOptions.infiniteInitialRowCount; };
     GridOptionsWrapper.prototype.isPurgeClosedRowNodes = function () { return isTrue(this.gridOptions.purgeClosedRowNodes); };
     GridOptionsWrapper.prototype.getPaginationStartPage = function () { return this.gridOptions.paginationStartPage; };
@@ -1718,6 +1718,30 @@ var GridOptionsWrapper = (function () {
         }
         else {
             return 25;
+        }
+    };
+    GridOptionsWrapper.prototype.getFloatingFiltersHeight = function () {
+        if (typeof this.gridOptions.floatingFiltersHeight === 'number') {
+            return this.gridOptions.floatingFiltersHeight;
+        }
+        else {
+            return 20;
+        }
+    };
+    GridOptionsWrapper.prototype.getGroupHeaderHeight = function () {
+        if (typeof this.gridOptions.groupHeaderHeight === 'number') {
+            return this.gridOptions.groupHeaderHeight;
+        }
+        else {
+            return this.getHeaderHeight();
+        }
+    };
+    GridOptionsWrapper.prototype.getPivotHeaderHeight = function () {
+        if (typeof this.gridOptions.pivotHeaderHeight === 'number') {
+            return this.gridOptions.pivotHeaderHeight;
+        }
+        else {
+            return this.getHeaderHeight();
         }
     };
     GridOptionsWrapper.prototype.isExternalFilterPresent = function () {
@@ -1849,10 +1873,16 @@ var GridOptionsWrapper = (function () {
             console.warn('ag-grid: since version 9.0.x paginationInitialRowCount is now called infiniteInitialRowCount');
         }
         if (options.infinitePageSize) {
-            console.warn('ag-grid: since version 9.0.x infinitePageSize is now called infiniteBlockSize');
+            console.warn('ag-grid: since version 9.0.x infinitePageSize is now called cacheBlockSize');
+        }
+        if (options.infiniteBlockSize) {
+            console.warn('ag-grid: since version 10.0.x infinitePageSize is now called cacheBlockSize');
         }
         if (options.maxPagesInCache) {
             console.warn('ag-grid: since version 10.0.x maxPagesInCache is now called maxBlocksInCache');
+        }
+        if (options.paginationOverflowSize) {
+            console.warn('ag-grid: since version 10.0.x paginationOverflowSize is now called cacheOverflowSize');
         }
     };
     GridOptionsWrapper.prototype.getLocaleTextFunc = function () {
@@ -1916,6 +1946,9 @@ var GridOptionsWrapper = (function () {
     };
     GridOptionsWrapper.MIN_COL_WIDTH = 10;
     GridOptionsWrapper.PROP_HEADER_HEIGHT = 'headerHeight';
+    GridOptionsWrapper.PROP_GROUP_HEADER_HEIGHT = 'groupHeaderHeight';
+    GridOptionsWrapper.PROP_FLOATING_FILTERS_HEIGHT = 'floatingFiltersHeight';
+    GridOptionsWrapper.PROP_PIVOT_FILTERS_HEIGHT = 'pivotFiltersHeight';
     __decorate([
         context_1.Autowired('gridOptions'), 
         __metadata('design:type', Object)
@@ -4986,6 +5019,9 @@ var GridPanel = (function (_super) {
         this.addDestroyableEventListener(this.eventService, events_1.Events.EVENT_ITEMS_ADDED, this.onRowDataChanged.bind(this));
         this.addDestroyableEventListener(this.eventService, events_1.Events.EVENT_ITEMS_REMOVED, this.onRowDataChanged.bind(this));
         this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_HEADER_HEIGHT, this.setBodyAndHeaderHeights.bind(this));
+        this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_GROUP_HEADER_HEIGHT, this.setBodyAndHeaderHeights.bind(this));
+        this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_FLOATING_FILTERS_HEIGHT, this.setBodyAndHeaderHeights.bind(this));
+        this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_PIVOT_FILTERS_HEIGHT, this.setBodyAndHeaderHeights.bind(this));
     };
     GridPanel.prototype.addDragListeners = function () {
         var _this = this;
@@ -5981,12 +6017,21 @@ var GridPanel = (function (_super) {
         if (!heightOfContainer) {
             return;
         }
-        var headerHeight = this.gridOptionsWrapper.getHeaderHeight();
-        var numberOfRowsInHeader = this.columnController.getHeaderRowCount();
-        var totalHeaderHeight = headerHeight * numberOfRowsInHeader;
-        var floatingFilterActive = this.gridOptionsWrapper.isFloatingFilter() && !this.columnController.isPivotMode();
-        if (floatingFilterActive) {
-            totalHeaderHeight += 20;
+        var headerRowCount = this.columnController.getHeaderRowCount();
+        var totalHeaderHeight = 0;
+        if (!this.columnController.isPivotMode()) {
+            if (this.gridOptionsWrapper.isFloatingFilter()) {
+                headerRowCount++;
+            }
+            var numberOfFloating = (this.gridOptionsWrapper.isFloatingFilter() && !this.columnController.isPivotMode()) ? 1 : 0;
+            var numberOfNonGroups = 1 + numberOfFloating;
+            var numberOfGroups = headerRowCount - numberOfNonGroups;
+            totalHeaderHeight = numberOfFloating * this.gridOptionsWrapper.getFloatingFiltersHeight();
+            totalHeaderHeight += numberOfGroups * this.gridOptionsWrapper.getGroupHeaderHeight();
+            totalHeaderHeight += this.gridOptionsWrapper.getHeaderHeight();
+        }
+        else {
+            totalHeaderHeight = headerRowCount * this.gridOptionsWrapper.getPivotHeaderHeight();
         }
         this.eHeader.style['height'] = totalHeaderHeight + 'px';
         // padding top covers the header and the floating rows on top
@@ -8035,7 +8080,7 @@ var DragAndDropService = (function () {
         this.setGhostIcon(null);
         var eText = this.eGhost.querySelector('.ag-dnd-ghost-label');
         eText.innerHTML = this.dragSource.dragItemName;
-        this.eGhost.style.height = this.gridOptionsWrapper.getHeaderHeight() + 'px';
+        this.eGhost.style.height = '25px';
         this.eGhost.style.top = '20px';
         this.eGhost.style.left = '20px';
         var usrDocument = this.gridOptionsWrapper.getDocument();
@@ -9515,9 +9560,13 @@ var ValueService = (function () {
         this.initialised = true;
     };
     ValueService.prototype.getValue = function (column, node) {
+        var valueUsingSpecificData = this.getValueUsingSpecificData(column, node.data, node);
+        if (valueUsingSpecificData != null) {
+            return valueUsingSpecificData;
+        }
         if (node.group && column.getColId() === node.field)
             return node.key;
-        return this.getValueUsingSpecificData(column, node.data, node);
+        return null;
     };
     ValueService.prototype.getValueUsingSpecificData = function (column, data, node) {
         // hack - the grid is getting refreshed before this bean gets initialised, race condition.
@@ -10566,6 +10615,19 @@ var GridApi = (function () {
     };
     GridApi.prototype.setHeaderHeight = function (headerHeight) {
         this.gridOptionsWrapper.setProperty(gridOptionsWrapper_1.GridOptionsWrapper.PROP_HEADER_HEIGHT, headerHeight);
+        this.doLayout();
+    };
+    GridApi.prototype.setGroupHeaderHeight = function (headerHeight) {
+        this.gridOptionsWrapper.setProperty(gridOptionsWrapper_1.GridOptionsWrapper.PROP_GROUP_HEADER_HEIGHT, headerHeight);
+        this.doLayout();
+    };
+    GridApi.prototype.setFloatingFiltersHeight = function (headerHeight) {
+        this.gridOptionsWrapper.setProperty(gridOptionsWrapper_1.GridOptionsWrapper.PROP_FLOATING_FILTERS_HEIGHT, headerHeight);
+        this.doLayout();
+    };
+    GridApi.prototype.setPivotFiltersHeight = function (headerHeight) {
+        this.gridOptionsWrapper.setProperty(gridOptionsWrapper_1.GridOptionsWrapper.PROP_PIVOT_FILTERS_HEIGHT, headerHeight);
+        this.doLayout();
     };
     GridApi.prototype.showToolPanel = function (show) {
         this.gridCore.showToolPanel(show);
@@ -19312,10 +19374,11 @@ var ComponentUtil = (function () {
         'slaveGrids', 'rowData', 'floatingTopRowData', 'floatingBottomRowData', 'columnDefs', 'excelStyles'
     ];
     ComponentUtil.NUMBER_PROPERTIES = [
-        'rowHeight', 'rowBuffer', 'colWidth', 'headerHeight', 'groupDefaultExpanded',
+        'rowHeight', 'rowBuffer', 'colWidth', 'headerHeight', 'groupHeaderHeight', 'floatingFiltersHeight',
+        'pivotHeaderHeight', 'groupDefaultExpanded',
         'minColWidth', 'maxColWidth', 'viewportRowModelPageSize', 'viewportRowModelBufferSize',
         'layoutInterval', 'autoSizePadding', 'maxBlocksInCache', 'maxConcurrentDatasourceRequests',
-        'paginationOverflowSize', 'paginationPageSize', 'infiniteBlockSize', 'infiniteInitialRowCount',
+        'cacheOverflowSize', 'paginationPageSize', 'infiniteBlockSize', 'infiniteInitialRowCount',
         'scrollbarWidth', 'paginationStartPage', 'infiniteBlockSize'
     ];
     ComponentUtil.BOOLEAN_PROPERTIES = [
@@ -23849,7 +23912,10 @@ var AggregationStage = (function () {
         });
         //Optionally prevent the aggregation at the root Node
         //https://ag-grid.atlassian.net/browse/AG-388
-        if (rowNode.level === -1 && this.gridOptionsWrapper.isSuppressAggAtRootLevel())
+        var notPivoting = !this.columnController.isPivotMode();
+        var suppressAggAtRootLevel = this.gridOptionsWrapper.isSuppressAggAtRootLevel();
+        var isRootNode = rowNode.level === -1;
+        if (isRootNode && suppressAggAtRootLevel && notPivoting)
             return;
         this.aggregateRowNode(rowNode, measureColumns, pivotColumns);
     };
@@ -27136,9 +27202,30 @@ var HeaderRowComp = (function (_super) {
         });
     };
     HeaderRowComp.prototype.onRowHeightChanged = function () {
-        var rowHeight = this.gridOptionsWrapper.getHeaderHeight();
-        this.getGui().style.top = (this.dept * rowHeight) + 'px';
-        this.getGui().style.height = rowHeight + 'px';
+        var headerRowCount = this.columnController.getHeaderRowCount();
+        var sizes = [];
+        if (!this.columnController.isPivotMode()) {
+            if (this.gridOptionsWrapper.isFloatingFilter()) {
+                headerRowCount++;
+            }
+            var numberOfFloating = this.gridOptionsWrapper.isFloatingFilter() ? 1 : 0;
+            var numberOfNonGroups = 1 + numberOfFloating;
+            var numberOfGroups = headerRowCount - numberOfNonGroups;
+            for (var i = 0; i < numberOfGroups; i++)
+                sizes.push(this.gridOptionsWrapper.getGroupHeaderHeight());
+            sizes.push(this.gridOptionsWrapper.getHeaderHeight());
+            for (var i = 0; i < numberOfFloating; i++)
+                sizes.push(this.gridOptionsWrapper.getFloatingFiltersHeight());
+        }
+        else {
+            for (var i = 0; i < headerRowCount; i++)
+                sizes.push(this.gridOptionsWrapper.getPivotHeaderHeight());
+        }
+        var rowHeight = 0;
+        for (var i = 0; i < this.dept; i++)
+            rowHeight += sizes[i];
+        this.getGui().style.top = rowHeight + 'px';
+        this.getGui().style.height = sizes[this.dept] + 'px';
     };
     //noinspection JSUnusedLocalSymbols
     HeaderRowComp.prototype.init = function () {
@@ -27146,6 +27233,9 @@ var HeaderRowComp = (function (_super) {
         this.onVirtualColumnsChanged();
         this.setWidth();
         this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_HEADER_HEIGHT, this.onRowHeightChanged.bind(this));
+        this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_GROUP_HEADER_HEIGHT, this.onRowHeightChanged.bind(this));
+        this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_FLOATING_FILTERS_HEIGHT, this.onRowHeightChanged.bind(this));
+        this.addDestroyableEventListener(this.gridOptionsWrapper, gridOptionsWrapper_1.GridOptionsWrapper.PROP_PIVOT_FILTERS_HEIGHT, this.onRowHeightChanged.bind(this));
         this.addDestroyableEventListener(this.eventService, events_1.Events.EVENT_VIRTUAL_COLUMNS_CHANGED, this.onVirtualColumnsChanged.bind(this));
         this.addDestroyableEventListener(this.eventService, events_1.Events.EVENT_DISPLAYED_COLUMNS_CHANGED, this.onDisplayedColumnsChanged.bind(this));
         this.addDestroyableEventListener(this.eventService, events_1.Events.EVENT_COLUMN_RESIZED, this.onColumnResized.bind(this));
@@ -32293,10 +32383,10 @@ var InfiniteRowModel = (function (_super) {
             // used next time we create a new cache, which is generally after a filter or sort change,
             // or a new datasource is set
             maxConcurrentRequests: maxConcurrentRequests,
-            overflowSize: this.gridOptionsWrapper.getPaginationOverflowSize(),
+            overflowSize: this.gridOptionsWrapper.getCacheOverflowSize(),
             initialRowCount: this.gridOptionsWrapper.getInfiniteInitialRowCount(),
             maxBlocksInCache: this.gridOptionsWrapper.getMaxBlocksInCache(),
-            blockSize: this.gridOptionsWrapper.getInfiniteBlockSize(),
+            blockSize: this.gridOptionsWrapper.getCacheBlockSize(),
             rowHeight: this.gridOptionsWrapper.getRowHeightAsNumber(),
             // the cache could create this, however it is also used by the pages, so handy to create it
             // here as the settings are also passed to the pages
@@ -33503,7 +33593,7 @@ var EnterpriseRowModel = (function (_super) {
             initialRowCount: 1,
             maxConcurrentRequests: this.gridOptionsWrapper.getMaxConcurrentDatasourceRequests(),
             maxBlocksInCache: this.gridOptionsWrapper.getMaxBlocksInCache(),
-            blockSize: this.gridOptionsWrapper.getInfiniteBlockSize(),
+            blockSize: this.gridOptionsWrapper.getCacheBlockSize(),
             rowHeight: this.rowHeight
         };
         // set defaults
@@ -34653,6 +34743,12 @@ var HeaderGroupWrapperComp = (function (_super) {
         }
         else {
             this.addCssClass('ag-header-group-cell-with-group');
+        }
+        if (this.columnController.isPivotMode()) {
+            this.addCssClass('ag-header-pivot');
+        }
+        else {
+            this.removeCssClass('ag-header-pivot');
         }
     };
     HeaderGroupWrapperComp.prototype.setupMove = function (eHeaderGroup, displayName) {
@@ -35863,7 +35959,7 @@ __webpack_require__(152);
             filterParams: {
                 newRowsAction: 'keep'
             },
-            allowedAggFuncs: ['sum','min','max','bollocks']
+            allowedAggFuncs: ['sum','min','max']
         },
         columnDefs: columnDefs,
         enableColResize: true,
